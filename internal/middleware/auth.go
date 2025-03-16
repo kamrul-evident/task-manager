@@ -57,3 +57,73 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next() // Proceed to the next handler
 	}
 }
+
+
+// package middleware
+
+// import (
+// 	"net/http"
+// 	"os"
+
+// 	"github.com/gin-gonic/gin"
+// 	uuid "github.com/google/uuid"
+// )
+
+// // RequestIDMiddleware ...
+// // Generate a unique ID and attach it to each request for future reference or use
+// func RequestIDMiddleware() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		uuid := uuid.New()
+// 		c.Writer.Header().Set("X-Request-Id", uuid.String())
+// 		c.Next()
+// 	}
+// }
+
+// // TokenAuthMiddleware ...
+// // JWT Authentication middleware attached to each request that needs to be authenitcated to validate the access_token in the header
+// func TokenAuthMiddleware() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		authorization := c.Request.Header.Get("SECRET-KEY")
+// 		if authorization == "" {
+// 			//Token either expired or not valid
+// 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Token Verfication Failed"})
+// 			return
+// 		}
+// 		if authorization != "6433220e-5f0b-4238-bb11-046f589e9149" {
+// 			c.JSON(http.StatusUnauthorized, "Token Verfication Failed")
+// 		}
+// 		c.Next()
+// 	}
+// }
+
+// func AuthAccessTokenMiddleware() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+
+// 		if c.Request.Header.Get("Authorization") != "" {
+// 			client := &http.Client{}
+// 			req, _ := http.NewRequest("GET", os.Getenv("AUTH_URL"), nil)
+// 			req.Header.Set("Authorization", c.Request.Header.Get("Authorization"))
+// 			resp, err := client.Do(req)
+// 			if err != nil {
+// 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Token Verfication Failed !"})
+// 				return
+// 			}
+// 			defer resp.Body.Close()
+
+// 			if resp.StatusCode != 200 {
+// 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Token Verfication Failed !"})
+// 				return
+// 			}
+// 			c.Next()
+// 		}
+
+// 		if c.Request.Header.Get("SECRET-KEY") != "" {
+// 			if c.Request.Header.Get("SECRET-KEY") != "6433220e-5f0b-4238-bb11-046f589e9149" {
+// 				c.AbortWithStatusJSON(http.StatusUnauthorized, "Token Verfication Failed")
+// 				return
+// 			}
+// 			c.Next()
+// 		}
+
+// 	}
+// }
