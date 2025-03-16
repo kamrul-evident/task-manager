@@ -79,19 +79,32 @@ func (uc *UserController) GetUser(c *gin.Context) {
 }
 
 func (uc *UserController) CreateUser(c *gin.Context) {
-	var user models.User
-	if err := c.ShouldBindJSON(&user); err != nil {
+	var input struct {
+		Email    string          `json:"email"`
+		Password string          `json:"password"`
+		IsActive bool            `json:"is_active"`
+		IsAdmin  bool            `json:"is_admin"`
+		Role     models.UserRole `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Hash the password
-	hashedPassword, err := services.HashPassword(user.Password)
+	hashedPassword, err := services.HashPassword(input.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
 	}
-	user.Password = hashedPassword
+
+	user := models.User{
+		Email:    input.Email,
+		Password: hashedPassword, // Store the hashed password
+		IsActive: input.IsActive,
+		IsAdmin:  input.IsAdmin,
+		Role:     input.Role,
+	}
 
 	if err := database.DB.Create(&user).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
