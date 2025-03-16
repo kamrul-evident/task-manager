@@ -12,9 +12,9 @@ import (
 
 type UserController struct{}
 
-var jwtSecret = []byte("h3Gz9aPqWmT1dU8kLzNr5FvR8yJx2Shq")
+var jwtSecret = []byte("h3Gz9aPqWmT1dU8kLzNr5FvR8yJx2Shq") // Access token secret
+var refreshSecret = []byte("x7KpL9mQvT3rY5uB8nZ1cW4eA6tD2sF") // Refresh token secret (different key for security)
 
-// Login handles user authentication and returns a JWT
 func (uc *UserController) Login(c *gin.Context) {
 	var input struct {
 		Email    string `json:"email"`
@@ -27,36 +27,50 @@ func (uc *UserController) Login(c *gin.Context) {
 
 	var user models.User
 	if err := database.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid email or password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
-
-	// Debug: Log the values
-    // c.Writer.WriteString("Stored hash: " + user.Password + "\n")
-	// new_hsh_pass, _ := services.HashPassword(input.Password)
-    // c.Writer.WriteString("Input password: " + new_hsh_pass + "\n")
 
 	// Verify password
 	if err := services.VerifyPassword(user.Password, input.Password); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid email or password from verify password"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 		return
 	}
 
-	// Create JWT token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	// Generate Access Token (short-lived, e.g., 15 minutes)
+	accessExpiry := time.Now().Add(15 * time.Minute)
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":    user.ID,
 		"email": user.Email,
 		"role":  user.Role,
-		"exp":   time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
+		"exp":   accessExpiry.Unix(),
 	})
-
-	tokenString, err := token.SignedString(jwtSecret)
+	accessTokenString, err := accessToken.SignedString(jwtSecret)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate access token"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+	// Generate Refresh Token (longer-lived, e.g., 7 days)
+	refreshExpiry := time.Now().Add(7 * 24 * time.Hour)
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.ID,
+		"exp": refreshExpiry.Unix(),
+	})
+	refreshTokenString, err := refreshToken.SignedString(refreshSecret)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate refresh token"})
+		return
+	}
+
+	// Response with both tokens, role, and expiry times
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  accessTokenString,
+		"refresh_token": refreshTokenString,
+		"role":          user.Role,
+		"access_expiry": accessExpiry.Format(time.RFC3339),
+		"refresh_expiry": refreshExpiry.Format(time.RFC3339),
+	})
 }
 
 func (uc *UserController) GetUsers(c *gin.Context) {

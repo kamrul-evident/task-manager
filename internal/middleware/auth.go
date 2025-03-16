@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 	"strings"
-	"task-management/internal/models"
+	"task-manager/internal/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
