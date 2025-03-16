@@ -1,14 +1,63 @@
 package controllers
 
 import (
+	"time"
 	"net/http"
 	"task-manager/internal/database"
 	"task-manager/internal/models"
 	"task-manager/internal/services"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type UserController struct{}
+
+var jwtSecret = []byte("h3Gz9aPqWmT1dU8kLzNr5FvR8yJx2Shq")
+
+// Login handles user authentication and returns a JWT
+func (uc *UserController) Login(c *gin.Context) {
+	var input struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid email or password"})
+		return
+	}
+
+	// Debug: Log the values
+    // c.Writer.WriteString("Stored hash: " + user.Password + "\n")
+	// new_hsh_pass, _ := services.HashPassword(input.Password)
+    // c.Writer.WriteString("Input password: " + new_hsh_pass + "\n")
+
+	// Verify password
+	if err := services.VerifyPassword(user.Password, input.Password); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid email or password from verify password"})
+		return
+	}
+
+	// Create JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":    user.ID,
+		"email": user.Email,
+		"role":  user.Role,
+		"exp":   time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
+	})
+
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+}
 
 func (uc *UserController) GetUsers(c *gin.Context) {
 	var users []models.User
