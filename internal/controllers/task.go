@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"time"
 	"net/http"
 	"task-manager/internal/database"
 	"task-manager/internal/models"
@@ -46,47 +47,74 @@ func (tc *TaskController) UpdateTask(c *gin.Context) {
 	var task models.Task
 	id := c.Param("id")
 
-	// Check if task exists
+	// Fetch the task
 	if err := database.DB.First(&task, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 		return
 	}
 
-	// Bind updated fields
-	var input models.Task
+	// Define input struct with only the fields we want to update
+	var input struct {
+		Name        string          `json:"name"`
+		Description *string         `json:"description"`
+		DueDate     *time.Time      `json:"due_date"`
+		Priority    models.Priority `json:"priority"`
+		Category    *string         `json:"category"`
+		Status      models.TaskStatus `json:"status"`
+		AssigneeID  *uint           `json:"assignee_id"` // Expect user ID or null
+	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Update fields (only if provided)
+	// Update fields if provided
 	if input.Name != "" {
 		task.Name = input.Name
 	}
-	if input.Description != nil { // Check if provided, since it's a pointer
+	if input.Description != nil {
 		task.Description = input.Description
 	}
 	if input.DueDate != nil {
 		task.DueDate = input.DueDate
 	}
-	if input.Priority != "" && input.Priority != task.Priority {
+	if input.Priority != "" {
 		task.Priority = input.Priority
 	}
 	if input.Category != nil {
 		task.Category = input.Category
 	}
-	if input.Status != "" && input.Status != task.Status {
+	if input.Status != "" {
 		task.Status = input.Status
 	}
-	if input.AssigneeID != nil {
-		task.AssigneeID = input.AssigneeID
+	// Update AssigneeID if provided (can be a new ID or null)
+	if input.AssigneeID != nil || task.AssigneeID != nil { // Check if assignee is changing
+		if input.AssigneeID != nil && (task.AssigneeID == nil || *input.AssigneeID != *task.AssigneeID) ||
+			(input.AssigneeID == nil && task.AssigneeID != nil) {
+			task.AssigneeID = input.AssigneeID
+			// Optional validation: Ensure user exists if ID is provided
+			if input.AssigneeID != nil {
+				var user models.User
+				if err := database.DB.First(&user, *input.AssigneeID).Error; err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Assignee user not found"})
+					return
+				}
+			}
+		}
 	}
 
-	// Save changes
+	// Save the updated task
 	if err := database.DB.Save(&task).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Optional: Preload Assignee for response
+	if err := database.DB.Preload("Assignee").First(&task, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load assignee"})
+		return
+	}
+
 	c.JSON(http.StatusOK, task)
 }
 
